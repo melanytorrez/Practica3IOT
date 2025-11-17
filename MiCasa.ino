@@ -4,22 +4,24 @@
 #include <ArduinoJson.h>
 #include <ESP32Servo.h>
 
-// --- CONFIGURACIÓN DEL HARDWARE ---
-#define PIR_PIN 23        // Pin para el sensor de movimiento PIR
-#define LED_PIN 22        // Pin para el LED
-#define SERVO_PIN 21      // Pin para el servomotor
-#define SERVO_OPEN_POS 90   // Posición en grados para "puerta abierta"
-#define SERVO_CLOSED_POS 0 // Posición en grados para "puerta cerrada"
+// ...existing code...
 
-// --- CONFIGURACIÓN DE RED Y AWS ---
-const char* WIFI_SSID = "Flia.Torrez.Llanos"; // <--- RELLENA ESTO
-const char* WIFI_PASS = "Entel@2022"; // <--- RELLENA ESTO
+// --- HARDWARE CONFIGURATION ---
+#define PIR_PIN 23        // Pin for the PIR motion sensor
+#define LED_PIN 22        // Pin for the LED
+#define SERVO_PIN 21      // Pin for the servo motor
+#define SERVO_OPEN_POS 90   // Position in degrees for "door open"
+#define SERVO_CLOSED_POS 0 // Position in degrees for "door closed"
 
-const char* MQTT_BROKER = "a30eisqpnafvzg-ats.iot.us-east-1.amazonaws.com"; // <--- RELLENA CON TU ENDPOINT
-const char* THING_NAME = "MiCasa"; // <--- ASEGÚRATE DE QUE COINCIDA CON TU THING Y LAMBDA
+// --- NETWORK AND AWS CONFIGURATION ---
+const char* WIFI_SSID = "Flia.Torrez.Llanos"; // <--- FILL THIS
+const char* WIFI_PASS = "Entel@2022"; // <--- FILL THIS
 
-// --- CERTIFICADOS DE AWS ---
-// Certificado raíz de Amazon
+const char* MQTT_BROKER = "a30eisqpnafvzg-ats.iot.us-east-1.amazonaws.com"; // <--- FILL WITH YOUR ENDPOINT
+const char* THING_NAME = "MiCasa"; // <--- MAKE SURE THIS MATCHES YOUR THING AND LAMBDA
+
+// --- AWS CERTIFICATES ---
+// Amazon root certificate
 const char AMAZON_ROOT_CA1[] PROGMEM = R"EOF(
 -----BEGIN CERTIFICATE-----
 MIIDQTCCAimgAwIBAgITBmyfz5m/jAo54vB4ikPmljZbyjANBgkqhkiG9w0BAQsF
@@ -43,7 +45,7 @@ rqXRfboQnoZsG4q5WTP468SQvvG5
 -----END CERTIFICATE-----
 )EOF";
 
-// Certificado del dispositivo (Thing)
+// Device (Thing) certificate
 const char CERTIFICATE[] PROGMEM = R"KEY(
 -----BEGIN CERTIFICATE-----
 MIIDWTCCAkGgAwIBAgIUcka0Kb1nuTZpIctqVn42GcrNIZwwDQYJKoZIhvcNAQEL
@@ -67,7 +69,7 @@ d2z6HxJQCXUb+yO+6/6vc3MSJwsQEyXlQAbmdb3i+TCbM/H6aHkqZ0ZfNM1T
 -----END CERTIFICATE-----
 )KEY";
 
-// Clave privada del dispositivo (Thing)
+// Device (Thing) private key
 const char PRIVATE_KEY[] PROGMEM = R"KEY(
 -----BEGIN RSA PRIVATE KEY-----
 MIIEpAIBAAKCAQEAnYxL0diSmIBBQl9Y6tCCd9jRGXQtq/cE4F8Orf4JA1qcO1Rt
@@ -98,26 +100,26 @@ nJpEIzLfc/oMZjHxg2oJAL7Mt9g2rbJKuxCWZWHiHBH8sDCwJRms4w==
 -----END RSA PRIVATE KEY-----
 )KEY";
 
-// --- TEMAS (TOPICS) MQTT PARA EL SHADOW ---
+// --- MQTT TOPICS FOR THE SHADOW ---
 const char* UPDATE_TOPIC = "$aws/things/MiCasa/shadow/update";
 const char* UPDATE_DELTA_TOPIC = "$aws/things/MiCasa/shadow/update/delta";
 
-// --- CLIENTES Y OBJETOS GLOBALES ---
+// --- GLOBAL CLIENTS AND OBJECTS ---
 WiFiClientSecure wiFiClient;
 PubSubClient mqttClient(wiFiClient);
 Servo myServo;
 
-// --- VARIABLES DE ESTADO ---
+// --- STATE VARIABLES ---
 String ledState = "OFF";
 String doorState = "CLOSED";
 String motionState = "NOT_DETECTED";
-String lastMotionState = "NOT_DETECTED"; // Para detectar cambios
+String lastMotionState = "NOT_DETECTED"; // To detect changes
 
-// --- DECLARACIÓN DE FUNCIONES ---
+// --- FUNCTION DECLARATIONS ---
 void publishShadowUpdate();
 
-// --- FUNCIÓN DE CALLBACK PARA MENSAJES MQTT ---
-// Se ejecuta cada vez que llega un mensaje del tema 'delta'
+// --- MQTT MESSAGE CALLBACK FUNCTION ---
+// Executes every time a message from the 'delta' topic arrives
 void callback(char* topic, byte* payload, unsigned int length) {
   Serial.println("-----------------------");
   Serial.print("Mensaje recibido del tema: ");
@@ -127,9 +129,9 @@ void callback(char* topic, byte* payload, unsigned int length) {
   deserializeJson(doc, payload, length);
   
   JsonObject state = doc["state"];
-  bool stateChanged = false; // Bandera para saber si debemos reportar un cambio
+  bool stateChanged = false; // Flag to know if we must report a change
 
-  // --- Lógica para el LED ---
+  // --- LED logic ---
   if (state.containsKey("ledState")) {
     String desiredLedState = state["ledState"].as<String>();
     Serial.print("Estado deseado para el LED: ");
@@ -145,7 +147,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
     }
   }
   
-  // --- Lógica para la Puerta (Servo) ---
+  // --- Door (Servo) logic ---
   if (state.containsKey("doorState")) {
     String desiredDoorState = state["doorState"].as<String>();
     Serial.print("Estado deseado para la Puerta: ");
@@ -161,14 +163,14 @@ void callback(char* topic, byte* payload, unsigned int length) {
     }
   }
 
-  // Si algún estado cambió por una orden de Alexa, publicamos el nuevo estado reportado
+  // If any state changed due to an Alexa command, publish the new reported state
   if (stateChanged) {
     Serial.println("El estado ha cambiado por una orden, publicando actualización...");
     publishShadowUpdate();
   }
 }
 
-// --- FUNCIÓN PARA PUBLICAR EL ESTADO ACTUAL AL SHADOW ---
+// --- FUNCTION TO PUBLISH CURRENT STATE TO THE SHADOW ---
 void publishShadowUpdate() {
   StaticJsonDocument<512> jsonDoc;
   JsonObject state = jsonDoc.createNestedObject("state");
@@ -187,7 +189,7 @@ void publishShadowUpdate() {
   mqttClient.publish(UPDATE_TOPIC, jsonBuffer);
 }
 
-// --- FUNCIÓN PARA VERIFICAR EL SENSOR DE MOVIMIENTO ---
+// --- FUNCTION TO CHECK THE MOTION SENSOR ---
 void checkMotionSensor() {
   if (digitalRead(PIR_PIN) == HIGH) {
     motionState = "DETECTED";
@@ -195,12 +197,12 @@ void checkMotionSensor() {
     motionState = "NOT_DETECTED";
   }
 
-  // Si el estado del sensor ha cambiado, lo publicamos
+  // If the sensor state changed, publish it
   if (motionState != lastMotionState) {
     Serial.print("¡Cambio en el sensor de movimiento! Nuevo estado: ");
     Serial.println(motionState);
     publishShadowUpdate();
-    lastMotionState = motionState; // Actualizamos el último estado conocido
+    lastMotionState = motionState; // Update the last known state
   }
 }
 
@@ -222,11 +224,11 @@ void reconnectMQTT() {
     Serial.print("Intentando conexión MQTT...");
     if (mqttClient.connect(THING_NAME)) {
       Serial.println("¡Conectado a AWS IoT!");
-      // Nos suscribimos al tema 'delta' para recibir las órdenes de Alexa
+      // We subscribe to the 'delta' topic to receive Alexa's commands
       mqttClient.subscribe(UPDATE_DELTA_TOPIC);
       Serial.print("Suscrito a: ");
       Serial.println(UPDATE_DELTA_TOPIC);
-      // Publicamos nuestro estado inicial al conectar
+      // We publish our initial state upon connecting
       publishShadowUpdate();
     } else {
       Serial.print("falló, rc=");
@@ -237,37 +239,37 @@ void reconnectMQTT() {
   }
 }
 
-// --- FUNCIÓN SETUP PRINCIPAL ---
+// --- MAIN LOOP FUNCTION ---
 void setup() {
   Serial.begin(115200);
   delay(1000);
 
-  // Configuración de pines
+  // Pin configuration
   pinMode(LED_PIN, OUTPUT);
   pinMode(PIR_PIN, INPUT);
   myServo.attach(SERVO_PIN);
   
-  // Estado inicial de los actuadores
+  // Initial state of actuators
   digitalWrite(LED_PIN, LOW);
   myServo.write(SERVO_CLOSED_POS);
 
-  // Conexión a la red y a AWS
+  // Network and AWS connection
   setupWiFi();
   wiFiClient.setCACert(AMAZON_ROOT_CA1);
   wiFiClient.setCertificate(CERTIFICATE);
   wiFiClient.setPrivateKey(PRIVATE_KEY);
 
   mqttClient.setServer(MQTT_BROKER, 8883);
-  mqttClient.setCallback(callback); // Asignamos la función que manejará los mensajes
+  mqttClient.setCallback(callback); // Assign the function that will handle messages
 }
 
-// --- FUNCIÓN LOOP PRINCIPAL ---
+// --- MAIN LOOP FUNCTION ---
 void loop() {
   if (!mqttClient.connected()) {
     reconnectMQTT();
   }
-  mqttClient.loop(); // Mantiene la conexión y procesa mensajes entrantes
+  mqttClient.loop(); // Maintains the connection and processes incoming messages
 
-  checkMotionSensor(); // Verificamos el sensor de movimiento constantemente
-  delay(200); // Pequeña pausa para no saturar
+  checkMotionSensor(); // We check the motion sensor continuously
+  delay(200); // Small pause to avoid overload
 }
